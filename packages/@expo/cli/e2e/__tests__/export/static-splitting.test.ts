@@ -99,6 +99,7 @@ describe('exports static with bundle splitting', () => {
         '\\[...post\\]',
         'about',
         'asset',
+        'head',
         'links',
         'styled',
       ]
@@ -114,8 +115,8 @@ describe('exports static with bundle splitting', () => {
       expect(sourceMap.version).toBe(3);
 
       // Common chunk
-      if (file!.match(/head/)) {
-        expect(sourceMap.sources.length).toEqual(29);
+      if (file!.match(/__common/)) {
+        expect(sourceMap.sources.length).toEqual(45);
       } else {
         // expect(sourceMap.sources).toEqual(
         //   expect.arrayContaining([

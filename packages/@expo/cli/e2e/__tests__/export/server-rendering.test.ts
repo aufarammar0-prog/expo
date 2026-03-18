@@ -214,7 +214,10 @@ describe('exports server', () => {
     it('injects hydration assets into SSR response', async () => {
       const html = await server.fetchAsync('/').then((res) => res.text());
 
-      expect(html).toMatch(/<script src="\/_expo\/static\/js\/web\/entry-.*\.js" defer><\/script>/);
+      // Streaming SSR uses bootstrapScripts which emits async scripts (with an id attribute)
+      expect(html).toMatch(
+        /<script src="\/_expo\/static\/js\/web\/entry-.*\.js"[^>]*async=""><\/script>/
+      );
     });
 
     it('SSR styles are injected', async () => {
@@ -242,7 +245,10 @@ describe('exports server', () => {
 
       const links = indexHtml.querySelectorAll('html > head > link').filter((link) => {
         // Fonts are tested elsewhere
-        return link.attributes.as !== 'font';
+        if (link.attributes.as === 'font') return false;
+        // Streaming SSR adds <link rel="preload" as="script"> for bootstrapScripts — filter those out
+        if (link.attributes.as === 'script') return false;
+        return true;
       });
       expect(links.length).toBe(
         // Global CSS, CSS Module
@@ -340,10 +346,33 @@ describe('exports server', () => {
       // Root element
       expect(page).toContain('<div id="root">');
 
-      const sanitized = page.replace(
-        /<script src="\/_expo\/static\/js\/web\/.*" defer>/,
-        '<script src="/_expo/static/js/web/[mock].js" defer>'
-      );
+      const sanitized = page
+        // Streaming SSR: <script src="..." id="_R_" async="">
+        .replace(
+          /<script src="\/_expo\/static\/js\/web\/[^"]*"[^>]*async="">/,
+          '<script src="/_expo/static/js/web/[mock].js" async="">'
+        )
+        // Streaming SSR: <link rel="preload" as="script" fetchPriority="low" href="..."/>
+        .replace(
+          /<link rel="preload" as="script"[^>]*href="\/_expo\/static\/js\/web\/[^"]*"[^>]*\/>/,
+          '<link rel="preload" as="script" href="/_expo/static/js/web/[mock].js"/>'
+        )
+        .replace(
+          /<link rel="preload" href="\/_expo\/static\/css\/global-[^"]*\.css" as="style">/,
+          '<link rel="preload" href="/_expo/static/css/global-[mock].css" as="style">'
+        )
+        .replace(
+          /<link rel="stylesheet" href="\/_expo\/static\/css\/global-[^"]*\.css">/,
+          '<link rel="stylesheet" href="/_expo/static/css/global-[mock].css">'
+        )
+        .replace(
+          /<link rel="preload" href="\/_expo\/static\/css\/test\.module-[^"]*\.css" as="style">/,
+          '<link rel="preload" href="/_expo/static/css/test.module-[mock].css" as="style">'
+        )
+        .replace(
+          /<link rel="stylesheet" href="\/_expo\/static\/css\/test\.module-[^"]*\.css">/,
+          '<link rel="stylesheet" href="/_expo/static/css/test.module-[mock].css">'
+        );
       expect(sanitized).toMatchSnapshot();
 
       expect(
@@ -387,6 +416,18 @@ describe('exports server', () => {
           await server.fetchAsync('/welcome-to-the-universe').then((r) => r.text())
         ).querySelector('html > head > meta[name="expo-nested-layout"]')?.attributes.content
       ).toBe('TEST_VALUE');
+    });
+
+    it('injects shell-available head metadata but not late suspended head metadata', async () => {
+      const page = getHtml(await server.fetchAsync('/head').then((res) => res.text()));
+
+      expect(page.querySelector('html > body [data-testid="late-head-text"]')?.innerText).toBe(
+        'Late Head'
+      );
+      expect(
+        page.querySelector('html > head > meta[name="expo-e2e-shell-head"]')?.attributes.content
+      ).toBe('shell');
+      expect(page.querySelector('html > head > meta[name="expo-e2e-late-head"]')).toBeNull();
     });
   });
 });
