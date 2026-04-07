@@ -1,5 +1,7 @@
 // Copyright 2025-present 650 Industries. All rights reserved.
 
+import ExpoModulesJSI
+
 /**
  Optimized synchronous function definition.
  This is used by the `@OptimizedFunction` macro with specific type signatures.
@@ -47,16 +49,20 @@ public struct OptimizedSyncFunctionDefinition: AnySyncFunctionDefinition, @unche
     throw GenericException("OptimizedSyncFunctionDefinition cannot be called directly")
   }
 
+  public func call(_ appContext: AppContext, this: JavaScriptValue, arguments: consuming JavaScriptValuesBuffer) throws(Exception) -> ExpoModulesJSI.JavaScriptValue {
+    throw GenericException("OptimizedSyncFunctionDefinition cannot be called directly")
+  }
+
   // MARK: - JavaScriptObjectBuilder
 
   @JavaScriptActor
   public func build(appContext: AppContext) throws -> JavaScriptObject {
-    return try appContext.runtime.createSyncFunction(
-      name,
-      typeEncoding: typeEncoding,
-      argsCount: argsCount,
-      body: block
-    )
+    // TODO: Re-implement optimized function registration using the new JSI API.
+    // The old implementation used NSInvocation with ObjC type encoding to bypass
+    // JavaScriptValue boxing for primitive types. This needs a new approach
+    // that works with Swift/C++ interop — either a C++ helper in ExpoModulesJSI-Cxx
+    // or a pure Swift solution using the type encoding to read jsi::Value args directly.
+    fatalError("OptimizedSyncFunctionDefinition.build is not yet implemented with the new JSI API")
   }
 
   // MARK: - Descriptor Factory

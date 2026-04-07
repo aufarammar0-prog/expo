@@ -40,6 +40,7 @@ PODS:
     - ExpoModulesTestCore
   - Expo (55.0.2):
     - ExpoModulesCore
+    - ExpoModulesJSI
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -300,6 +301,7 @@ PODS:
     - Yoga
   - Expo/Tests (55.0.2):
     - ExpoModulesCore
+    - ExpoModulesJSI
     - ExpoModulesTestCore
     - hermes-engine
     - RCTRequired
@@ -507,13 +509,11 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ExpoModulesJSI (55.0.12):
-    - hermes-engine
+  - ExpoModulesJSI (55.0.0):
     - React-Core
     - React-runtimescheduler
     - ReactCommon
-  - ExpoModulesJSI/Tests (55.0.12):
-    - hermes-engine
+  - ExpoModulesJSI/Tests (55.0.0):
     - React-Core
     - React-runtimescheduler
     - ReactCommon
@@ -3207,8 +3207,8 @@ DEPENDENCIES:
   - ExpoMeshGradient (from `../../../packages/expo-mesh-gradient/ios`)
   - ExpoModulesCore (from `../../../packages/expo-modules-core`)
   - ExpoModulesCore/Tests (from `../../../packages/expo-modules-core`)
-  - ExpoModulesJSI (from `../../../packages/expo-modules-core`)
-  - ExpoModulesJSI/Tests (from `../../../packages/expo-modules-core`)
+  - ExpoModulesJSI (from `../../../packages/expo-modules-jsi/apple`)
+  - ExpoModulesJSI/Tests (from `../../../packages/expo-modules-jsi/apple`)
   - "ExpoModulesMacros (from `../../../node_modules/.pnpm/@expo+expo-modules-macros-plugin@0.0.7/node_modules/@expo/expo-modules-macros-plugin/apple`)"
   - "ExpoModulesMacros/Tests (from `../../../node_modules/.pnpm/@expo+expo-modules-macros-plugin@0.0.7/node_modules/@expo/expo-modules-macros-plugin/apple`)"
   - ExpoModulesTestCore (from `../../../packages/expo-modules-test-core/ios`)
@@ -3519,7 +3519,7 @@ EXTERNAL SOURCES:
     :path: "../../../packages/expo-modules-core"
   ExpoModulesJSI:
     inhibit_warnings: false
-    :path: "../../../packages/expo-modules-core"
+    :path: "../../../packages/expo-modules-jsi/apple"
   ExpoModulesMacros:
     inhibit_warnings: false
     :path: "../../../node_modules/.pnpm/@expo+expo-modules-macros-plugin@0.0.7/node_modules/@expo/expo-modules-macros-plugin/apple"
@@ -3805,7 +3805,7 @@ SPEC CHECKSUMS:
   EXConstants: ed3e09607493bb717a7932f0e6786846169692a2
   EXJSONUtils: 475f1af3d20fbd99268694df81d096817092aa89
   EXManifests: ad24b3a497444eee9e07cc8590b09974ba369050
-  Expo: 5b891535ab874124ee26c5216419748c2fcc55e3
+  Expo: 944473cd66ee19b8ee899df0b98e490bce19b991
   expo-dev-client: 929c5e873b07c54035ab42aa165f095f74478d6c
   expo-dev-launcher: 52dad5ea74c968013ebb2707370e28a0cf9d8b7f
   expo-dev-menu: 3ab7b064b3d3db84334481bdb24325e0b67889c3
@@ -3852,8 +3852,8 @@ SPEC CHECKSUMS:
   ExpoMaps: 94294944cff46ad1170ce4f92800adecbcdd04ac
   ExpoMediaLibrary: 2fbddcb06042f43076cf5e495e8237ec2ab95726
   ExpoMeshGradient: 93cf09380e6d86cd7a525da26dfddab2620a8421
-  ExpoModulesCore: 175c54e26f394abfc6da4371b3fb4f8d2d0716c8
-  ExpoModulesJSI: 793687b04cbaa73ee8548bfdbcfba85954d1b2b5
+  ExpoModulesCore: f1b93877874e7a60f7349abba367af9108b4236e
+  ExpoModulesJSI: 038a93335094858ad924173b98c57f721fac7c4f
   ExpoModulesMacros: 6e01118aed19527180871e271177089c34d90dd2
   ExpoModulesTestCore: 62ce59e8c8162b449e65467e0421240256ba6732
   ExpoModulesWorklets: b30dedcdbf25eb96934bb0a67622afdf4865b33c
@@ -3883,7 +3883,7 @@ SPEC CHECKSUMS:
   EXUpdates: a0f980531cbcf45906b2489febd4e11a5895f332
   EXUpdatesInterface: 5ab8c3e8018ef533a132b9327af5b2a1926dd299
   FBLazyVector: 0a4f3183cfecc7c9f3db440332ab522298a14a2e
-  hermes-engine: 725fd85144e1348879039099a6be950c471a4f2c
+  hermes-engine: e1ae00897676f600a9439d408b42f8c8ba5dbc24
   libavif: 5f8e715bea24debec477006f21ef9e95432e254d
   libdav1d: 23581a4d8ec811ff171ed5e2e05cd27bad64c39f
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
@@ -3901,7 +3901,7 @@ SPEC CHECKSUMS:
   React: 16d31b8b032e8f8bc687b80f89493c5909e17152
   React-callinvoker: 5ebf1032973c67f358820d649bc97ee1380b1e27
   React-Core: 93acbf2b58b8fa7e91cdc17842893a3ac58ec2f3
-  React-Core-prebuilt: 3511b71cfccfc66be7ea6243cfc572df80602865
+  React-Core-prebuilt: c54c2d77e02370d45686b18fcea28f45d2887be8
   React-CoreModules: edc6940bbae2a0a4084281104f8bdd3bac28ea02
   React-cxxreact: 2b313bf858930139f39cc3cb38af0df057137556
   React-debug: 321c2c55a233e31cb4d88e7ff86880bbb73d8cfd
@@ -3971,7 +3971,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 9021ba029d8a68bd2236fa2f3a763c4b08c1db61
   ReactCodegen: 1bb7fd17c4d95c54f4e51a522ca094332fb57b96
   ReactCommon: f9e37991d8ed29fe1c9c9510f9ae87570fe35474
-  ReactNativeDependencies: 31f96d915ff27c8f98342cbf24c44eba232f6557
+  ReactNativeDependencies: a1c0c548298c43a9464be2551ed587dcf4a1eaef
   RNCAsyncStorage: 2ad919e88b8bc2cd80e8697ce66d04d006743283
   RNCMaskedView: eb2b2e538afa907f05a5848a1a1ac26092e6fec9
   RNCPicker: d74667bdfc08ed389a2a277d95b8faf2349290a9
@@ -3991,6 +3991,6 @@ SPEC CHECKSUMS:
   Yoga: 983ded1b2ad53df33755f1f74cad7fee7d3081c4
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
 
-PODFILE CHECKSUM: 192c7b44d7282134e69d78ede989d660bdb877c2
+PODFILE CHECKSUM: a63ddafbc2bc8dd131f1bd3f4790fd1cf3a50279
 
 COCOAPODS: 1.16.2
