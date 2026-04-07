@@ -5,6 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import EventEmitter from 'events';
+import { promises as fsPromises } from 'fs';
+import invariant from 'invariant';
+import * as path from 'path';
+import { performance } from 'perf_hooks';
+
+import { Watcher } from './Watcher';
+import { DiskCacheManager } from './cache/DiskCacheManager';
+import H from './constants';
+import createFallbackFilesystem from './crawlers/node/fallback';
+import { FileProcessor } from './lib/FileProcessor';
+import { FileSystemChangeAggregator } from './lib/FileSystemChangeAggregator';
+import { RootPathUtils } from './lib/RootPathUtils';
+import TreeFS from './lib/TreeFS';
+import checkWatchmanCapabilities from './lib/checkWatchmanCapabilities';
+import normalizePathSeparatorsToPosix from './lib/normalizePathSeparatorsToPosix';
+import normalizePathSeparatorsToSystem from './lib/normalizePathSeparatorsToSystem';
 import type {
   BuildParameters,
   BuildResult,
@@ -39,23 +56,6 @@ import type {
   WatcherBackendChangeEvent,
   WatchmanClocks,
 } from './types';
-
-import { DiskCacheManager } from './cache/DiskCacheManager';
-import createFallbackFilesystem from './crawlers/node/fallback';
-import H from './constants';
-import checkWatchmanCapabilities from './lib/checkWatchmanCapabilities';
-import { FileProcessor } from './lib/FileProcessor';
-import { FileSystemChangeAggregator } from './lib/FileSystemChangeAggregator';
-import normalizePathSeparatorsToPosix from './lib/normalizePathSeparatorsToPosix';
-import normalizePathSeparatorsToSystem from './lib/normalizePathSeparatorsToSystem';
-import { RootPathUtils } from './lib/RootPathUtils';
-import TreeFS from './lib/TreeFS';
-import { Watcher } from './Watcher';
-import EventEmitter from 'events';
-import { promises as fsPromises } from 'fs';
-import invariant from 'invariant';
-import * as path from 'path';
-import { performance } from 'perf_hooks';
 
 const debug = require('debug')('Metro:FileMap');
 
@@ -277,8 +277,7 @@ export default class FileMap extends EventEmitter {
     super();
 
     if (options.perfLoggerFactory) {
-      this.#startupPerfLogger =
-        options.perfLoggerFactory?.('START_UP').subSpan('fileMap') ?? null;
+      this.#startupPerfLogger = options.perfLoggerFactory?.('START_UP').subSpan('fileMap') ?? null;
       this.#startupPerfLogger?.point('constructor_start');
     }
 
@@ -302,8 +301,8 @@ export default class FileMap extends EventEmitter {
 
     let dataSlot: number = H.PLUGINDATA;
 
-    const indexedPlugins: Array<IndexedPlugin> = [];
-    const pluginWorkers: Array<FileMapPluginWorker> = [];
+    const indexedPlugins: IndexedPlugin[] = [];
+    const pluginWorkers: FileMapPluginWorker[] = [];
     const plugins = options.plugins ?? [];
     for (const plugin of plugins) {
       const maybeWorker = plugin.getWorker();
@@ -513,9 +512,7 @@ export default class FileMap extends EventEmitter {
   /**
    * 2. crawl the file system.
    */
-  async #buildFileDelta(
-    previousState: CrawlerOptions['previousState']
-  ): Promise<CrawlResult> {
+  async #buildFileDelta(previousState: CrawlerOptions['previousState']): Promise<CrawlResult> {
     this.#startupPerfLogger?.point('buildFileDelta_start');
 
     const {
@@ -562,10 +559,7 @@ export default class FileMap extends EventEmitter {
     return result;
   }
 
-  #maybeReadLink(
-    normalPath: Path,
-    fileMetadata: FileMetadata
-  ): Promise<void> | undefined | null {
+  #maybeReadLink(normalPath: Path, fileMetadata: FileMetadata): Promise<void> | undefined | null {
     // If we only need to read a link, it's more efficient to do it in-band
     // (with async file IO) than to have the overhead of worker IO.
     if (fileMetadata[H.SYMLINK] === 1) {
@@ -600,12 +594,12 @@ export default class FileMap extends EventEmitter {
     }
     this.#startupPerfLogger?.point('applyFileDelta_remove_end');
 
-    const readLinkPromises: Array<Promise<void>> = [];
-    const readLinkErrors: Array<{
+    const readLinkPromises: Promise<void>[] = [];
+    const readLinkErrors: {
       normalFilePath: string;
       error: Error & { code?: string };
-    }> = [];
-    const filesToProcess: Array<[string, FileMetadata]> = [];
+    }[] = [];
+    const filesToProcess: [string, FileMetadata][] = [];
 
     for (const [normalFilePath, fileData] of changedFiles) {
       // A crawler may preserve the H.VISITED flag to indicate that the file
@@ -745,7 +739,7 @@ export default class FileMap extends EventEmitter {
 
     let nextEmit:
       | {
-          events: Array<InternalEnqueuedEvent>;
+          events: InternalEnqueuedEvent[];
           firstEventTimestamp: number;
           firstEnqueuedTimestamp: number;
         }
@@ -973,9 +967,7 @@ export default class FileMap extends EventEmitter {
             }
 
             // Emit changes directly
-            const toPublicMetadata = (
-              metadata: Readonly<FileMetadata>
-            ): ChangedFileMetadata => ({
+            const toPublicMetadata = (metadata: Readonly<FileMetadata>): ChangedFileMetadata => ({
               isSymlink: metadata[H.SYMLINK] !== 0,
               modifiedTime: metadata[H.MTIME] ?? null,
             });
@@ -986,7 +978,7 @@ export default class FileMap extends EventEmitter {
             // See: https://github.com/facebook/metro/commit/e23bad71bc808e89966ed787c4e1e9905c9f3db4
             const recrawlEventsQueue = eventsQueueFromChanges(
               recrawlChangeAggregator.getView(),
-              this.#pathUtils,
+              this.#pathUtils
             );
             const changeEvent: ChangeEvent = {
               changes: changesWithMetadata,
@@ -1083,10 +1075,7 @@ export default class FileMap extends EventEmitter {
     return ++this.#changeID;
   }
 
-  #updateClock(
-    clocks: WatchmanClocks,
-    newClock: ChangeEventClock | undefined | null
-  ): void {
+  #updateClock(clocks: WatchmanClocks, newClock: ChangeEventClock | undefined | null): void {
     if (newClock == null) {
       return;
     }
@@ -1113,7 +1102,7 @@ function mapIterable<T, S>(it: Iterable<T>, fn: (item: T) => S): Iterable<S> {
 // See: https://github.com/facebook/metro/commit/e23bad71bc808e89966ed787c4e1e9905c9f3db4
 function eventsQueueFromChanges(
   changes: ReadonlyFileSystemChanges<FileMetadata>,
-  pathUtils: RootPathUtils,
+  pathUtils: RootPathUtils
 ): EventsQueue {
   const eventsQueue: EventsQueue = [];
   for (const [canonicalPath, metadata] of changes.removedFiles) {
