@@ -43,21 +43,22 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HastePlugin = exports.HasteConflictsError = exports.DuplicateHasteCandidatesError = exports.DependencyPlugin = exports.DiskCacheManager = void 0;
-const DiskCacheManager_1 = require("./cache/DiskCacheManager");
-const constants_1 = __importDefault(require("./constants"));
-const checkWatchmanCapabilities_1 = __importDefault(require("./lib/checkWatchmanCapabilities"));
-const FileProcessor_1 = require("./lib/FileProcessor");
-const FileSystemChangeAggregator_1 = require("./lib/FileSystemChangeAggregator");
-const normalizePathSeparatorsToPosix_1 = __importDefault(require("./lib/normalizePathSeparatorsToPosix"));
-const normalizePathSeparatorsToSystem_1 = __importDefault(require("./lib/normalizePathSeparatorsToSystem"));
-const RootPathUtils_1 = require("./lib/RootPathUtils");
-const TreeFS_1 = __importDefault(require("./lib/TreeFS"));
-const Watcher_1 = require("./Watcher");
 const events_1 = __importDefault(require("events"));
 const fs_1 = require("fs");
 const invariant_1 = __importDefault(require("invariant"));
 const path = __importStar(require("path"));
 const perf_hooks_1 = require("perf_hooks");
+const Watcher_1 = require("./Watcher");
+const DiskCacheManager_1 = require("./cache/DiskCacheManager");
+const constants_1 = __importDefault(require("./constants"));
+const fallback_1 = __importDefault(require("./crawlers/node/fallback"));
+const FileProcessor_1 = require("./lib/FileProcessor");
+const FileSystemChangeAggregator_1 = require("./lib/FileSystemChangeAggregator");
+const RootPathUtils_1 = require("./lib/RootPathUtils");
+const TreeFS_1 = __importDefault(require("./lib/TreeFS"));
+const checkWatchmanCapabilities_1 = __importDefault(require("./lib/checkWatchmanCapabilities"));
+const normalizePathSeparatorsToPosix_1 = __importDefault(require("./lib/normalizePathSeparatorsToPosix"));
+const normalizePathSeparatorsToSystem_1 = __importDefault(require("./lib/normalizePathSeparatorsToSystem"));
 const debug = require('debug')('Metro:FileMap');
 var DiskCacheManager_2 = require("./cache/DiskCacheManager");
 Object.defineProperty(exports, "DiskCacheManager", { enumerable: true, get: function () { return DiskCacheManager_2.DiskCacheManager; } });
@@ -184,8 +185,7 @@ class FileMap extends events_1.default {
     constructor(options) {
         super();
         if (options.perfLoggerFactory) {
-            this.#startupPerfLogger =
-                options.perfLoggerFactory?.('START_UP').subSpan('fileMap') ?? null;
+            this.#startupPerfLogger = options.perfLoggerFactory?.('START_UP').subSpan('fileMap') ?? null;
             this.#startupPerfLogger?.point('constructor_start');
         }
         // Add VCS_DIRECTORIES to provided ignorePattern
@@ -218,12 +218,15 @@ class FileMap extends events_1.default {
             }
         }
         this.#plugins = indexedPlugins;
+        const enableFallback = options.enableFallback ?? true;
+        const scopeFallback = options.scopeFallback ?? true;
         const buildParameters = {
             cacheBreaker: CACHE_BREAKER,
             computeSha1: options.computeSha1 || false,
             enableSymlinks: options.enableSymlinks || false,
             extensions: options.extensions,
-            forceNodeFilesystemAPI: !!options.forceNodeFilesystemAPI,
+            skipStat: options.skipStat ?? true,
+            scopeFallback: enableFallback && scopeFallback,
             ignorePattern,
             plugins,
             retainAllFiles: options.retainAllFiles,
@@ -238,6 +241,9 @@ class FileMap extends events_1.default {
             useWatchman: options.useWatchman == null ? true : options.useWatchman,
             watch: !!options.watch,
             watchmanDeferStates: options.watchmanDeferStates ?? [],
+            enableFallback,
+            scopeFallback,
+            serverRoot: options.serverRoot,
         };
         const cacheFactoryOptions = {
             buildParameters,
@@ -274,8 +280,8 @@ class FileMap extends events_1.default {
                 }
                 const rootDir = this.#options.rootDir;
                 this.#startupPerfLogger?.point('constructFileSystem_start');
-                const processFile = (normalPath, metadata, opts) => {
-                    const result = this.#fileProcessor.processRegularFile(normalPath, metadata, {
+                const processFile = async (normalPath, metadata, opts) => {
+                    const result = await this.#fileProcessor.processRegularFile(normalPath, metadata, {
                         computeSha1: opts.computeSha1,
                         maybeReturnContent: true,
                     });
@@ -284,6 +290,15 @@ class FileMap extends events_1.default {
                     this.emit('metadata');
                     return result?.content;
                 };
+                const fallbackFilesystem = this.#options.enableFallback
+                    ? (0, fallback_1.default)({
+                        extensions: this.#options.extensions,
+                        ignore: (filePath) => this.#options.ignorePattern.test(filePath),
+                        includeSymlinks: this.#options.enableSymlinks,
+                    })
+                    : null;
+                const { roots } = this.#options;
+                const serverRoot = this.#options.scopeFallback ? this.#options.serverRoot : null;
                 const fileSystem = initialData != null
                     ? TreeFS_1.default.fromDeserializedSnapshot({
                         // Typed `mixed` because we've read this from an external
@@ -292,8 +307,17 @@ class FileMap extends events_1.default {
                         fileSystemData: initialData.fileSystemData,
                         processFile,
                         rootDir,
+                        fallbackFilesystem,
+                        roots,
+                        serverRoot,
                     })
-                    : new TreeFS_1.default({ processFile, rootDir });
+                    : new TreeFS_1.default({
+                        processFile,
+                        rootDir,
+                        fallbackFilesystem,
+                        roots,
+                        serverRoot,
+                    });
                 this.#startupPerfLogger?.point('constructFileSystem_end');
                 const plugins = this.#plugins;
                 // Initialize plugins from cached file system and plugin state while
@@ -369,14 +393,14 @@ class FileMap extends events_1.default {
      */
     async #buildFileDelta(previousState) {
         this.#startupPerfLogger?.point('buildFileDelta_start');
-        const { computeSha1, enableSymlinks, extensions, forceNodeFilesystemAPI, ignorePattern, retainAllFiles, roots, rootDir, watch, watchmanDeferStates, } = this.#options;
+        const { computeSha1, enableSymlinks, skipStat, extensions, ignorePattern, retainAllFiles, roots, rootDir, watch, watchmanDeferStates, } = this.#options;
         this.#watcher = new Watcher_1.Watcher({
             abortSignal: this.#crawlerAbortController.signal,
             computeSha1,
             console: this.#console,
             enableSymlinks,
+            skipStat,
             extensions,
-            forceNodeFilesystemAPI,
             healthCheckFilePrefix: this.#options.healthCheck.filePrefix,
             // TODO: Refactor out the two different ignore strategies here.
             ignoreForCrawl: (filePath) => {

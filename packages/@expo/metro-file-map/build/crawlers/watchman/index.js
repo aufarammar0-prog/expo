@@ -43,14 +43,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = watchmanCrawl;
-const normalizePathSeparatorsToPosix_1 = __importDefault(require("../../lib/normalizePathSeparatorsToPosix"));
-const normalizePathSeparatorsToSystem_1 = __importDefault(require("../../lib/normalizePathSeparatorsToSystem"));
-const RootPathUtils_1 = require("../../lib/RootPathUtils");
-const planQuery_1 = require("./planQuery");
 const fb_watchman_1 = __importDefault(require("fb-watchman"));
 const invariant_1 = __importDefault(require("invariant"));
 const path = __importStar(require("path"));
 const perf_hooks_1 = require("perf_hooks");
+const planQuery_1 = require("./planQuery");
+const RootPathUtils_1 = require("../../lib/RootPathUtils");
+const normalizePathSeparatorsToPosix_1 = __importDefault(require("../../lib/normalizePathSeparatorsToPosix"));
+const normalizePathSeparatorsToSystem_1 = __importDefault(require("../../lib/normalizePathSeparatorsToSystem"));
 const WATCHMAN_WARNING_INITIAL_DELAY_MILLISECONDS = 10000;
 const WATCHMAN_WARNING_INTERVAL_MILLISECONDS = 20000;
 const watchmanURL = 'https://facebook.github.io/watchman/docs/troubleshooting';

@@ -45,18 +45,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = nodeCrawl;
-const RootPathUtils_1 = require("../../lib/RootPathUtils");
-const hasNativeFindSupport_1 = __importDefault(require("./hasNativeFindSupport"));
-const child_process_1 = require("child_process");
-const fs = __importStar(require("graceful-fs"));
-const os_1 = require("os");
+const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
-const debug = require('debug')('Metro:NodeCrawler');
+const constants_1 = __importDefault(require("../../constants"));
+const RootPathUtils_1 = require("../../lib/RootPathUtils");
 function find(roots, extensions, ignore, includeSymlinks, rootDir, console, callback) {
     const result = new Map();
     let activeCalls = 0;
     const pathUtils = new RootPathUtils_1.RootPathUtils(rootDir);
+    const visited = new Set();
+    const exts = extensions.reduce((acc, ext) => {
+        acc[ext] = true;
+        return acc;
+    }, {});
     function search(directory) {
+        if (visited.has(directory)) {
+            return;
+        }
+        else {
+            visited.add(directory);
+        }
         activeCalls++;
         fs.readdir(directory, { withFileTypes: true }, (err, entries) => {
             activeCalls--;
@@ -64,24 +72,22 @@ function find(roots, extensions, ignore, includeSymlinks, rootDir, console, call
                 console.warn(`Error "${err.code ?? err.message}" reading contents of "${directory}", skipping. Add this directory to your ignore list to exclude it.`);
             }
             else {
-                entries.forEach((entry) => {
+                for (let idx = 0; idx < entries.length; idx++) {
+                    const entry = entries[idx];
                     const file = path.join(directory, entry.name.toString());
-                    if (ignore(file)) {
-                        return;
+                    if (ignore(file) || (!includeSymlinks && entry.isSymbolicLink())) {
+                        continue;
                     }
-                    if (entry.isSymbolicLink() && !includeSymlinks) {
-                        return;
-                    }
-                    if (entry.isDirectory()) {
+                    else if (entry.isDirectory()) {
                         search(file);
-                        return;
+                        continue;
                     }
                     activeCalls++;
                     fs.lstat(file, (err, stat) => {
                         activeCalls--;
                         if (!err && stat) {
-                            const ext = path.extname(file).substr(1);
-                            if (stat.isSymbolicLink() || extensions.includes(ext)) {
+                            const ext = path.extname(file).slice(1);
+                            if (stat.isSymbolicLink() || exts[ext]) {
                                 result.set(pathUtils.absoluteToNormal(file), [
                                     stat.mtime.getTime(),
                                     stat.size,
@@ -96,7 +102,7 @@ function find(roots, extensions, ignore, includeSymlinks, rootDir, console, call
                             callback(result);
                         }
                     });
-                });
+                }
             }
             if (activeCalls === 0) {
                 callback(result);
@@ -110,81 +116,115 @@ function find(roots, extensions, ignore, includeSymlinks, rootDir, console, call
         callback(result);
     }
 }
-function findNative(roots, extensions, ignore, includeSymlinks, rootDir, console, callback) {
-    // Examples:
-    // ( ( -type f ( -iname *.js ) ) )
-    // ( ( -type f ( -iname *.js -o -iname *.ts ) ) )
-    // ( ( -type f ( -iname *.js ) ) -o -type l )
-    // ( ( -type f ) -o -type l )
-    const extensionClause = extensions.length
-        ? `( ${extensions.map((ext) => `-iname *.${ext}`).join(' -o ')} )`
-        : ''; // Empty inner expressions eg "( )" are not allowed
-    const expression = `( ( -type f ${extensionClause} ) ${includeSymlinks ? '-o -type l ' : ''})`;
+function findWithoutStat(roots, extensions, ignore, includeSymlinks, rootDir, console, callback) {
+    const result = new Map();
+    let activeCalls = 0;
     const pathUtils = new RootPathUtils_1.RootPathUtils(rootDir);
-    const child = (0, child_process_1.spawn)('find', [...roots, ...expression.split(' ')]);
-    let stdout = '';
-    if (child.stdout == null) {
-        throw new Error('stdout is null - this should never happen. Please open up an issue at https://github.com/facebook/metro');
-    }
-    child.stdout.setEncoding('utf-8');
-    child.stdout.on('data', (data) => (stdout += data));
-    child.stdout.on('close', () => {
-        const lines = stdout
-            .trim()
-            .split('\n')
-            .filter((x) => !ignore(x));
-        const result = new Map();
-        let count = lines.length;
-        if (!count) {
-            callback(new Map());
+    const visited = new Set();
+    const exts = extensions.reduce((acc, ext) => {
+        acc[ext] = true;
+        return acc;
+    }, {});
+    function search(directory, dirNormal) {
+        if (visited.has(directory)) {
+            return;
         }
-        else {
-            lines.forEach((filePath) => {
-                fs.lstat(filePath, (err, stat) => {
-                    if (!err && stat) {
-                        result.set(pathUtils.absoluteToNormal(filePath), [
-                            stat.mtime.getTime(),
-                            stat.size,
+        visited.add(directory);
+        activeCalls++;
+        fs.readdir(directory, { withFileTypes: true }, (err, entries) => {
+            activeCalls--;
+            if (err) {
+                console.warn(`Error "${err.code ?? err.message}" reading contents of "${directory}", skipping. Add this directory to your ignore list to exclude it.`);
+            }
+            else {
+                for (let idx = 0; idx < entries.length; idx++) {
+                    const entry = entries[idx];
+                    const name = entry.name.toString();
+                    const file = directory + path.sep + name;
+                    if (ignore(file) || (!includeSymlinks && entry.isSymbolicLink())) {
+                        continue;
+                    }
+                    // Build the normal path incrementally — avoids calling
+                    // absoluteToNormal per file.
+                    const fileNormal = dirNormal === '' ? name : dirNormal + path.sep + name;
+                    if (entry.isDirectory()) {
+                        search(file, fileNormal);
+                        continue;
+                    }
+                    const isSymlink = entry.isSymbolicLink();
+                    const ext = path.extname(name).slice(1);
+                    if (isSymlink || exts[ext]) {
+                        result.set(fileNormal, [
+                            null, // deferred to getDifference
+                            0, // unknown
                             0,
                             null,
-                            stat.isSymbolicLink() ? 1 : 0,
+                            isSymlink ? 1 : 0,
                             null,
                         ]);
                     }
-                    if (--count === 0) {
-                        callback(result);
-                    }
-                });
-            });
+                }
+            }
+            if (activeCalls === 0) {
+                callback(result);
+            }
+        });
+    }
+    if (roots.length > 0) {
+        roots.forEach((root) => search(root, pathUtils.absoluteToNormal(root)));
+    }
+    else {
+        callback(result);
+    }
+}
+async function asyncStatKnownFiles(fileData, previousFileSystem, rootDir) {
+    const pathUtils = new RootPathUtils_1.RootPathUtils(rootDir);
+    const promises = [];
+    const externalPrefix = '..' + path.sep;
+    for (const [normalPath, metadata] of fileData) {
+        if (metadata[constants_1.default.SYMLINK] !== 0) {
+            continue;
         }
-    });
+        else if (metadata[constants_1.default.MTIME] != null && metadata[constants_1.default.MTIME] > 0) {
+            continue;
+        }
+        else if (normalPath.startsWith(externalPrefix)) {
+            // Skip reading mtime for files outside of project root
+            continue;
+        }
+        const absolutePath = pathUtils.normalToAbsolute(normalPath);
+        if (!previousFileSystem.exists(absolutePath)) {
+            continue;
+        }
+        promises.push(fs.promises.lstat(absolutePath).then((stat) => {
+            metadata[constants_1.default.MTIME] = stat.mtime.getTime();
+            metadata[constants_1.default.SIZE] = stat.size;
+        }, () => {
+            fileData.delete(normalPath);
+        }));
+    }
+    await Promise.all(promises);
 }
 async function nodeCrawl(options) {
-    const { console, previousState, extensions, forceNodeFilesystemAPI, ignore, rootDir, includeSymlinks, perfLogger, roots, abortSignal, subpath, } = options;
+    const { console, previousState, extensions, ignore, rootDir, includeSymlinks, perfLogger, roots, skipStat, abortSignal, subpath, } = options;
     abortSignal?.throwIfAborted();
     perfLogger?.point('nodeCrawl_start');
-    const useNativeFind = !forceNodeFilesystemAPI && (0, os_1.platform)() !== 'win32' && (await (0, hasNativeFindSupport_1.default)());
-    debug('Using system find: %s', useNativeFind);
-    return new Promise((resolve, reject) => {
-        const callback = (fileData) => {
-            const difference = previousState.fileSystem.getDifference(fileData, {
-                subpath,
-            });
-            perfLogger?.point('nodeCrawl_end');
-            try {
-                // TODO: Use AbortSignal.reason directly when Flow supports it
-                abortSignal?.throwIfAborted();
-            }
-            catch (e) {
-                reject(e);
-            }
-            resolve(difference);
-        };
-        if (useNativeFind) {
-            findNative(roots, extensions, ignore, includeSymlinks, rootDir, console, callback);
-        }
-        else {
-            find(roots, extensions, ignore, includeSymlinks, rootDir, console, callback);
-        }
+    const crawlFn = skipStat ? findWithoutStat : find;
+    // (1): Discover files
+    const fileData = await new Promise((resolve) => {
+        crawlFn(roots, extensions, ignore, includeSymlinks, rootDir, console, resolve);
     });
+    perfLogger?.point('nodeCrawl_afterCrawl');
+    abortSignal?.throwIfAborted();
+    // (2): Async stat for files that exist in the previous filesystem.
+    if (skipStat) {
+        await asyncStatKnownFiles(fileData, previousState.fileSystem, rootDir);
+        perfLogger?.point('nodeCrawl_afterStat');
+        abortSignal?.throwIfAborted();
+    }
+    const difference = previousState.fileSystem.getDifference(fileData, {
+        subpath,
+    });
+    perfLogger?.point('nodeCrawl_end');
+    return difference;
 }

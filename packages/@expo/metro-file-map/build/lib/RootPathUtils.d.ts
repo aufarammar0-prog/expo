@@ -19,3 +19,5 @@ export declare class RootPathUtils {
     };
     relative(from: string, to: string): string;
 }
+export declare function getAncestorOfRootIdx(normalPath: string): number;
+export declare function pathsToPattern(paths: readonly string[], pathUtils: RootPathUtils): RegExp | null;

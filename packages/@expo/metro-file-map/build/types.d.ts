@@ -11,8 +11,9 @@ export type { PerfLoggerFactory, PerfLogger } from '@expo/metro/metro-config';
 export interface BuildParameters {
     readonly computeSha1: boolean;
     readonly enableSymlinks: boolean;
+    readonly scopeFallback: boolean;
+    readonly skipStat: boolean;
     readonly extensions: readonly string[];
-    readonly forceNodeFilesystemAPI: boolean;
     readonly ignorePattern: RegExp;
     readonly plugins: readonly InputFileMapPlugin[];
     readonly retainAllFiles: boolean;
@@ -72,11 +73,11 @@ export interface ChangeEvent {
     readonly rootDir: string;
     readonly eventsQueue: EventsQueue;
 }
-export type EventsQueue = Array<{
+export type EventsQueue = {
     filePath: Path;
     metadata: ChangeEventMetadata;
     type: string;
-}>;
+}[];
 export interface ChangeEventMetadata {
     modifiedTime: number | undefined | null;
     size: number | undefined | null;
@@ -92,13 +93,13 @@ export interface CrawlerOptions {
     computeSha1: boolean;
     console: Console;
     extensions: readonly string[];
-    forceNodeFilesystemAPI: boolean;
     ignore: IgnoreMatcher;
     includeSymlinks: boolean;
     perfLogger?: PerfLogger | null | undefined;
     previousState: CrawlerPreviousState;
     rootDir: string;
     roots: readonly string[];
+    skipStat: boolean;
     onStatus: (status: WatcherStatus) => void;
     subpath?: string;
 }
@@ -178,10 +179,10 @@ export interface FileMapPlugin<SerializableState extends undefined | V8Serializa
 }
 export type InputFileMapPlugin = FileMapPlugin;
 export interface MetadataWorkerParams {
-    getContent(): Buffer;
+    getContent(): Promise<Buffer>;
 }
 export interface MetadataWorker {
-    processFile(message: WorkerMessage, params: MetadataWorkerParams): V8Serializable;
+    processFile(message: WorkerMessage, params: MetadataWorkerParams): V8Serializable | Promise<V8Serializable>;
 }
 export type IgnoreMatcher = (item: string) => boolean;
 export type FileData = Map<CanonicalPath, FileMetadata>;
@@ -333,9 +334,15 @@ export interface MutableFileSystem extends FileSystem {
     bulkAddOrModify(addedOrModifiedFiles: FileData, listener?: FileSystemListener | undefined): void;
 }
 export type Path = string;
+type DirectoryNode = Map<string, MixedNode | null>;
+type MixedNode = FileMetadata | DirectoryNode;
+export interface FallbackFilesystem {
+    lookup(absolutePath: string, prevNode: MixedNode | null | undefined): MixedNode | null;
+    readdir(absolutePath: string, dirNode: DirectoryNode | null | undefined): DirectoryNode | null;
+}
 export type ProcessFileFunction = (normalPath: string, metadata: FileMetadata, request: Readonly<{
     computeSha1: boolean;
-}>) => Buffer | undefined | null;
+}>) => Promise<Buffer | undefined | null>;
 export type RawMockMap = {
     /** posix-separated mock name to posix-separated project-relative paths */
     readonly duplicates: Map<string, Set<string>>;
@@ -387,12 +394,15 @@ export type WatchmanClockSpec = string | {
 export type WatchmanClocks = Map<Path, WatchmanClockSpec>;
 export interface WorkerMessage {
     readonly computeSha1: boolean;
+    readonly computeMtime: boolean;
     readonly filePath: string;
     readonly maybeReturnContent: boolean;
     readonly pluginsToRun: readonly number[];
 }
 export interface WorkerMetadata {
     readonly sha1?: string | undefined | null;
+    readonly mtime?: number | undefined | null;
+    readonly size?: number | undefined | null;
     readonly content?: Buffer | undefined | null;
     readonly pluginData?: readonly V8Serializable[];
 }
