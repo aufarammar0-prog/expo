@@ -2,6 +2,7 @@ import { requireNativeView } from 'expo';
 import { type SFSymbol } from 'sf-symbols-typescript';
 
 import { type ObservableState, getStateId } from '../State';
+import { useWorkletProp } from '../State/worklet';
 import { createViewModifierEventListener } from '../modifiers/utils';
 import { type CommonViewModifierProps } from '../types';
 
@@ -19,10 +20,16 @@ export type SyncToggleProps = {
    * The name of the SF Symbol to display alongside the label.
    */
   systemImage?: SFSymbol;
+  /**
+   * A worklet callback that runs synchronously on the UI thread when the toggle changes.
+   * Must be marked with the `'worklet'` directive.
+   */
+  onIsOnChangeSync?: (isOn: boolean) => void;
 } & CommonViewModifierProps;
 
-type NativeSyncToggleProps = Omit<SyncToggleProps, 'isOn'> & {
+type NativeSyncToggleProps = Omit<SyncToggleProps, 'isOn' | 'onIsOnChangeSync'> & {
   isOn?: number;
+  onIsOnChangeSync?: number;
 };
 
 const SyncToggleNativeView: React.ComponentType<NativeSyncToggleProps> = requireNativeView(
@@ -35,12 +42,14 @@ const SyncToggleNativeView: React.ComponentType<NativeSyncToggleProps> = require
  * Use `useNativeState(false)` to create the state.
  */
 export function SyncToggle(props: SyncToggleProps) {
-  const { isOn, modifiers, ...restProps } = props;
+  const { isOn, onIsOnChangeSync, modifiers, ...restProps } = props;
+  const workletCallback = useWorkletProp(onIsOnChangeSync);
 
   return (
     <SyncToggleNativeView
       {...restProps}
       isOn={getStateId(isOn)}
+      onIsOnChangeSync={getStateId(workletCallback)}
       modifiers={modifiers}
       {...(modifiers ? createViewModifierEventListener(modifiers) : undefined)}
     />
