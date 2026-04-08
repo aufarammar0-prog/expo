@@ -16,7 +16,7 @@ export declare function useNativeState<T>(initialValue: T): ObservableState<T>;
  * Extracts the native shared object ID from a SharedObject instance.
  * Used internally to pass SharedObject references as view props.
  */
-export declare function getStateId(state?: object): number | undefined;
+export declare function getStateId(state?: object | null): number | undefined;
 /**
  * Registers a custom serializer so SharedObjects automatically work in worklets.
  * Call it after `installOnUIRuntime()`.

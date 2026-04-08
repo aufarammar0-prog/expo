@@ -2,7 +2,7 @@ import { requireNativeView } from 'expo';
 import { type SFSymbol } from 'sf-symbols-typescript';
 
 import { type ObservableState, getStateId } from '../State';
-import { useWorkletProp } from '../State/worklet';
+import { useWorkletProp } from '../State/useWorkletProp';
 import { createViewModifierEventListener } from '../modifiers/utils';
 import { type CommonViewModifierProps } from '../types';
 
@@ -43,7 +43,7 @@ const SyncToggleNativeView: React.ComponentType<NativeSyncToggleProps> = require
  */
 export function SyncToggle(props: SyncToggleProps) {
   const { isOn, onIsOnChangeSync, modifiers, ...restProps } = props;
-  const workletCallback = useWorkletProp(onIsOnChangeSync);
+  const workletCallback = useWorkletProp(onIsOnChangeSync, 'onIsOnChangeSync');
 
   return (
     <SyncToggleNativeView
